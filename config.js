@@ -6,7 +6,7 @@
 // 1) 내 Google Sheets 문서의 ID
 //    시트 주소가 https://docs.google.com/spreadsheets/d/【이 부분】/edit 라면
 //    가운데 【이 부분】만 복사해서 넣으세요.
-var SPREADSHEET_ID = "여기에_내_스프레드시트_ID를_넣으세요";
+var SPREADSHEET_ID = "1vpChz_3M8H50kAvbnk1IS-AnssnAVsCqURnCbh_evn8";
 
 // 2) 입고 내역이 들어 있는 탭(시트) 이름 — 글자 하나까지 똑같이
 var SHEET_NAME = "입고기록";
@@ -19,4 +19,4 @@ var VENDOR_SHEET_NAME = "거래처";
 // 4) Google Cloud에서 만든 OAuth 클라이언트 ID
 //    ...apps.googleusercontent.com 으로 끝나는 값입니다.
 //    ⚠️ 클라이언트 "시크릿"은 절대 여기 넣지 마세요. ID만 넣습니다.
-var CLIENT_ID = "여기에_내_클라이언트_ID를_넣으세요";
+var CLIENT_ID = "1010864947255-i24qnlcvio6c53lk5jedbfdos6ci4foq.apps.googleusercontent.com";
