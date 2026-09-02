@@ -3,52 +3,41 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>우리 공장 입고 관리</title>
+  <title>입고 관리</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="layout">
-
-    <!-- ===== 왼쪽 사이드바 ===== -->
     <aside class="sidebar">
       <div class="brand">
-        <span class="brand-icon">🏭</span>
-        <span class="brand-text">우리 공장<br /><b>입고 관리</b></span>
+        <span class="brand-mark" aria-hidden="true">IM</span>
+        <span class="brand-text">운영 관리<b>입고 관리</b></span>
       </div>
 
-      <!-- 메뉴는 app.js가 만듭니다 (시트 탭 3개에 맞춰서) -->
-      <nav class="nav" id="nav"></nav>
+      <nav class="nav" id="nav" aria-label="주요 메뉴"></nav>
 
       <div class="sidebar-foot">
-        <button class="btn-connect" type="button" id="btn-connect" disabled>준비 중…</button>
+        <button class="btn-connect" type="button" id="btn-connect" disabled>연결 준비 중</button>
         <p class="sidebar-note" id="account-note"></p>
       </div>
     </aside>
 
-    <!-- ===== 오른쪽 본문 ===== -->
     <main class="main">
-      <!-- 상태 안내줄: 로그인·저장·오류 상황을 여기에 보여 줍니다 -->
       <div class="status" id="status">
-        왼쪽 아래 <b>Google 계정으로 연결</b> 버튼을 누르면 내 시트의 내용을 불러옵니다.
+        좌측 하단의 <b>Google 계정 연결</b>을 선택하면 시트 데이터를 불러옵니다.
       </div>
 
-      <!-- 화면 3개(입고 내역 / 거래처 / 자재)는 app.js가 만듭니다 -->
       <div id="views"></div>
 
       <p class="note">
-        🔒 이 앱은 <b>추가·조회·수정</b>만 합니다. 행을 지우는 기능은 일부러 넣지 않았습니다.
-        지워야 할 행이 있으면 Google Sheets에서 직접 지우세요
-        (실수해도 시트의 <b>파일 → 버전 기록</b>으로 되돌릴 수 있습니다).
+        이 서비스는 <b>조회·추가·수정</b>만 지원합니다. 삭제가 필요하면 Google Sheets에서 직접 처리하고
+        <b>파일 → 버전 기록</b>을 통해 변경 이력을 관리하세요.
       </p>
     </main>
-
   </div>
 
-  <!-- 내 코드를 먼저 읽어 둡니다 (Google 라이브러리가 부를 함수들이 여기 들어 있습니다) -->
   <script src="config.js"></script>
   <script src="app.js"></script>
-
-  <!-- Google 라이브러리는 마지막에 -->
   <script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
   <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 </body>
