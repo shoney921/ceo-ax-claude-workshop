@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>우리 공장 입고 관리 — 화면 스케치</title>
+  <!--
+    ⚠️ 이것은 "사전 과제로 그려 본 화면 스케치"입니다. (완성본 아님 / 데이터 미연결)
+    - docs/reference/ 폴더에 넣고, STEP 04에서 Claude Code에게 참고 자료로 줍니다.
+    - 표에 보이는 값은 모두 예시입니다. 실제 데이터는 STEP 06에서 내 Google Sheets와 연결됩니다.
+    - 순수 HTML/CSS/JavaScript로만 만들었습니다 (프레임워크 없음).
+  -->
+  <style>
+    :root {
+      --blue: #1f6feb;
+      --blue-dark: #1a5fd0;
+      --ink: #1f2328;
+      --muted: #656d76;
+      --line: #d0d7de;
+      --bg: #f6f8fa;
+      --card: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.5;
+    }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+
+    /* ---- 헤더 ---- */
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap; margin-bottom: 20px;
+    }
+    header h1 { font-size: 22px; margin: 0; }
+    header p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+    .btn-connect {
+      background: var(--blue); color: #fff; border: none; border-radius: 8px;
+      padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    .btn-connect:hover { background: var(--blue-dark); }
+
+    /* ---- 요약 카드 ---- */
+    .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+    .stat {
+      background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px;
+    }
+    .stat .label { font-size: 12px; color: var(--muted); }
+    .stat .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+
+    /* ---- 공통 카드 ---- */
+    .card {
+      background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+      padding: 20px; margin-bottom: 24px;
+    }
+    .card h2 { font-size: 16px; margin: 0 0 16px; }
+
+    /* ---- 입력 폼 ---- */
+    .form-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field label { font-size: 12px; color: var(--muted); }
+    .field input, .field select {
+      padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px;
+      background: #fff; color: var(--ink);
+    }
+    .field.readonly input { background: var(--bg); color: var(--muted); }
+    .form-actions { margin-top: 16px; text-align: right; }
+    .btn-add {
+      background: var(--blue); color: #fff; border: none; border-radius: 8px;
+      padding: 10px 20px; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    .btn-add:hover { background: var(--blue-dark); }
+
+    /* ---- 표 ---- */
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 720px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    th { background: var(--bg); font-size: 12px; color: var(--muted); font-weight: 600; }
+    td.num, th.num { text-align: right; }
+    .btn-edit {
+      background: #fff; border: 1px solid var(--line); border-radius: 6px;
+      padding: 4px 12px; font-size: 13px; cursor: pointer; color: var(--ink);
+    }
+    .btn-edit:hover { border-color: var(--blue); color: var(--blue); }
+
+    .note {
+      font-size: 12px; color: var(--muted); background: #fff8e6;
+      border: 1px solid #f0e0a8; border-radius: 8px; padding: 10px 14px;
+    }
+    @media (max-width: 720px) {
+      .summary { grid-template-columns: 1fr; }
+      .form-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <header>
+      <div>
+        <h1>🏭 우리 공장 입고 관리</h1>
+        <p>자재 입고 내역을 기록하고 한눈에 봅니다</p>
+      </div>
+      <!-- 실제 로그인 연결은 STEP 06에서 붙입니다 (지금은 자리만) -->
+      <button class="btn-connect" type="button">Google 계정으로 연결</button>
+    </header>
+
+    <!-- 요약 (예시 숫자) -->
+    <section class="summary">
+      <div class="stat"><div class="label">총 입고 건수</div><div class="value">20건</div></div>
+      <div class="stat"><div class="label">총 입고 금액</div><div class="value">3,409,350원</div></div>
+      <div class="stat"><div class="label">이번 달 건수</div><div class="value">4건</div></div>
+    </section>
+
+    <!-- 입력 폼 (입고기록 열 구조와 동일) -->
+    <section class="card">
+      <h2>+ 입고 추가</h2>
+      <div class="form-grid">
+        <div class="field">
+          <label for="f-date">날짜</label>
+          <input id="f-date" type="date" value="2025-08-19" />
+        </div>
+        <div class="field">
+          <label for="f-item">자재명</label>
+          <select id="f-item">
+            <option>스테인리스 볼트 M6</option>
+            <option>스테인리스 볼트 M8</option>
+            <option>알루미늄 판재 2T</option>
+            <option>알루미늄 판재 3T</option>
+            <option>방수 테이프 50mm</option>
+            <option>실리콘 실란트</option>
+            <option>케이블 타이 200mm</option>
+            <option>고무 패킹 30mm</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="f-qty">수량</label>
+          <input id="f-qty" type="number" value="600" />
+        </div>
+        <div class="field">
+          <label for="f-price">단가</label>
+          <input id="f-price" type="number" value="118" />
+        </div>
+        <div class="field readonly">
+          <label for="f-amount">금액 (수량 × 단가, 자동)</label>
+          <input id="f-amount" type="text" value="70,800" readonly />
+        </div>
+        <div class="field">
+          <label for="f-vendor">거래처</label>
+          <select id="f-vendor">
+            <option>대한볼트</option>
+            <option>한빛금속</option>
+            <option>성일산업</option>
+            <option>동양고무</option>
+            <option>미래테크</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="f-mgr">담당자</label>
+          <input id="f-mgr" type="text" value="김현수" />
+        </div>
+        <div class="field">
+          <label for="f-note">비고</label>
+          <input id="f-note" type="text" placeholder="(선택)" />
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-add" type="button" id="btn-add">추가</button>
+      </div>
+    </section>
+
+    <!-- 표 (입고기록 예시 데이터) -->
+    <section class="card">
+      <h2>입고 내역</h2>
+      <div class="table-scroll">
+        <table id="tbl">
+          <thead>
+            <tr>
+              <th>날짜</th><th>자재명</th><th class="num">수량</th>
+              <th class="num">단가</th><th class="num">금액</th>
+              <th>거래처</th><th>담당자</th><th>비고</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>2025-08-19</td><td>스테인리스 볼트 M6</td><td class="num">600</td><td class="num">118</td><td class="num">70,800</td><td>대한볼트</td><td>김현수</td><td></td><td><button class="btn-edit" type="button">수정</button></td></tr>
+            <tr><td>2025-08-12</td><td>고무 패킹 40mm</td><td class="num">120</td><td class="num">820</td><td class="num">98,400</td><td>동양고무</td><td>박준영</td><td>신규 규격</td><td><button class="btn-edit" type="button">수정</button></td></tr>
+            <tr><td>2025-08-08</td><td>알루미늄 판재 3T</td><td class="num">30</td><td class="num">11,000</td><td class="num">330,000</td><td>한빛금속</td><td>김현수</td><td></td><td><button class="btn-edit" type="button">수정</button></td></tr>
+            <tr><td>2025-08-05</td><td>케이블 타이 200mm</td><td class="num">1,500</td><td class="num">15</td><td class="num">22,500</td><td>성일산업</td><td>이지은</td><td></td><td><button class="btn-edit" type="button">수정</button></td></tr>
+            <tr><td>2025-07-29</td><td>실리콘 실란트</td><td class="num">100</td><td class="num">3,150</td><td class="num">315,000</td><td>성일산업</td><td>이지은</td><td></td><td><button class="btn-edit" type="button">수정</button></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <p class="note">
+      🖉 이 화면은 <b>사전 과제로 그려 본 스케치</b>입니다. 위 숫자는 예시이고,
+      실제 데이터는 STEP 06에서 내 Google Sheets와 연결하면 채워집니다.
+      Claude Code에게 이 파일을 참고 자료로 주되, 실제 시트의 열 구조를 기준으로 만들어 달라고 하세요.
+    </p>
+
+  </div>
+
+  <script>
+    // 스케치용 최소 동작 — 금액 자동 계산과 "추가" 시 표에 행 미리보기.
+    // (실제 저장/조회는 STEP 06에서 Google Sheets 연동으로 구현합니다.)
+    var won = function (n) { return Number(n || 0).toLocaleString("ko-KR"); };
+    var qty = document.getElementById("f-qty");
+    var price = document.getElementById("f-price");
+    var amount = document.getElementById("f-amount");
+    function calc() { amount.value = won((Number(qty.value) || 0) * (Number(price.value) || 0)); }
+    qty.addEventListener("input", calc);
+    price.addEventListener("input", calc);
+
+    document.getElementById("btn-add").addEventListener("click", function () {
+      var tbody = document.querySelector("#tbl tbody");
+      var tr = document.createElement("tr");
+      var cells = [
+        document.getElementById("f-date").value,
+        document.getElementById("f-item").value,
+        won(qty.value), won(price.value), amount.value,
+        document.getElementById("f-vendor").value,
+        document.getElementById("f-mgr").value,
+        document.getElementById("f-note").value
+      ];
+      var html = "";
+      cells.forEach(function (c, i) {
+        var cls = (i >= 2 && i <= 4) ? ' class="num"' : "";
+        html += "<td" + cls + ">" + (c === "" ? "" : c) + "</td>";
+      });
+      html += '<td><button class="btn-edit" type="button">수정</button></td>';
+      tr.innerHTML = html;
+      tbody.insertBefore(tr, tbody.firstChild);
+    });
+
+    calc();
+  </script>
+</body>
+</html>

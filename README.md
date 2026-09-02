@@ -55,10 +55,24 @@
 ```
 ├── README.md                  ← 지금 보고 있는 안내판
 ├── CLAUDE.md                  ← Claude Code가 항상 먼저 읽는 업무 지침서
+├── index.html                 ← 실제 화면 (입고 관리)
+├── style.css                  ← 화면 꾸미기
+├── app.js                     ← 화면 동작 + Google Sheets 연결 (조회·추가·수정)
+├── config.js                  ← 내 시트 ID · 탭 이름 · 클라이언트 ID  ⭐여기만 채우면 됩니다
 ├── docs/                      ← 워크샵 교재 전부
 │   └── reference/             ← 사전 과제로 만든 화면 스케치 HTML을 넣습니다
 └── .claude/skills/            ← "배포해줘" / "저장해줘" 라고 말하면 실행되는 자동화
 ```
+
+### 처음 켤 때 채워야 하는 값 2개 (`config.js`)
+
+| 값 | 어디서 가져오나 |
+|---|---|
+| `SPREADSHEET_ID` | 내 시트 주소 `.../spreadsheets/d/`**`이 부분`**`/edit` |
+| `CLIENT_ID` | [STEP 05](docs/google-cloud-setup.md)에서 만든 `...apps.googleusercontent.com` |
+
+두 값을 넣고 배포한 뒤, **배포된 `https://...github.io/...` 주소에서** 열어야 Google 로그인이 됩니다.
+(내 PC 파일을 그냥 여는 `file:///...` 방식은 Google이 보안상 막습니다)
 
 ---
 

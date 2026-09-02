@@ -1,0 +1,136 @@
+/* ============================================================
+   style.css — 화면 꾸미기 (순수 CSS)
+   ============================================================ */
+
+:root {
+  --blue: #1f6feb;
+  --blue-dark: #1a5fd0;
+  --ink: #1f2328;
+  --muted: #656d76;
+  --line: #d0d7de;
+  --bg: #f6f8fa;
+  --card: #ffffff;
+  --green: #1a7f37;
+  --red: #cf222e;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+  line-height: 1.5;
+}
+
+.wrap { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
+.muted { color: var(--muted); font-weight: 400; font-size: 12px; }
+
+/* ---- 헤더 ---- */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+}
+header h1 { font-size: 22px; margin: 0; }
+header p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+
+.btn-connect {
+  background: var(--blue); color: #fff; border: none; border-radius: 8px;
+  padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.btn-connect:hover:not(:disabled) { background: var(--blue-dark); }
+.btn-connect:disabled { background: #b9c2cc; cursor: default; }
+.btn-connect.connected { background: #fff; color: var(--green); border: 1px solid var(--line); }
+
+/* ---- 상태 안내줄 ---- */
+.status {
+  background: #fff; border: 1px solid var(--line); border-left: 4px solid var(--blue);
+  border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--muted);
+  margin-bottom: 20px;
+}
+.status.ok { border-left-color: var(--green); color: var(--green); }
+.status.error { border-left-color: var(--red); color: var(--red); background: #fff5f5; }
+.status.busy { border-left-color: #bf8700; color: #8a6100; background: #fff8e6; }
+
+/* ---- 요약 카드 ---- */
+.summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.stat .label { font-size: 12px; color: var(--muted); }
+.stat .value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+
+/* ---- 공통 카드 ---- */
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 20px; margin-bottom: 24px;
+}
+.card h2 { font-size: 16px; margin: 0 0 16px; }
+
+/* ---- 입력 폼 ---- */
+.form-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 12px; color: var(--muted); }
+.field .unit { color: var(--blue); font-weight: 600; }
+.field input, .field select {
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px;
+  background: #fff; color: var(--ink); width: 100%;
+}
+.field input:disabled, .field select:disabled { background: var(--bg); color: #9aa4ae; }
+.field.readonly input { background: var(--bg); color: var(--muted); }
+
+.form-actions { margin-top: 16px; text-align: right; }
+.form-msg { font-size: 13px; margin-right: 12px; }
+.form-msg.ok { color: var(--green); }
+.form-msg.error { color: var(--red); }
+
+.btn-add {
+  background: var(--blue); color: #fff; border: none; border-radius: 8px;
+  padding: 10px 20px; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.btn-add:hover:not(:disabled) { background: var(--blue-dark); }
+.btn-add:disabled { background: #b9c2cc; cursor: default; }
+
+/* ---- 표 ---- */
+.table-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 820px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { background: var(--bg); font-size: 12px; color: var(--muted); font-weight: 600; }
+td.num, th.num { text-align: right; }
+tbody tr:hover { background: #fbfcfd; }
+.empty-row td { color: var(--muted); text-align: center; padding: 28px 12px; }
+
+/* 수정 중인 행 */
+tr.editing { background: #f2f7ff; }
+tr.editing td { padding: 6px 8px; }
+tr.editing input, tr.editing select {
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px;
+  font-size: 13px; width: 100%; min-width: 90px; background: #fff; color: var(--ink);
+}
+tr.editing input.num { text-align: right; }
+tr.editing td.amount-cell { text-align: right; color: var(--muted); font-size: 13px; }
+
+.btn-edit {
+  background: #fff; border: 1px solid var(--line); border-radius: 6px;
+  padding: 4px 12px; font-size: 13px; cursor: pointer; color: var(--ink);
+}
+.btn-edit:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
+.btn-edit:disabled { color: #b9c2cc; cursor: default; }
+.btn-save {
+  background: var(--blue); color: #fff; border: none; border-radius: 6px;
+  padding: 5px 12px; font-size: 13px; cursor: pointer; margin-right: 4px;
+}
+.btn-save:hover:not(:disabled) { background: var(--blue-dark); }
+.btn-cancel {
+  background: #fff; border: 1px solid var(--line); border-radius: 6px;
+  padding: 4px 10px; font-size: 13px; cursor: pointer; color: var(--muted);
+}
+
+.note {
+  font-size: 12px; color: var(--muted); background: #fff8e6;
+  border: 1px solid #f0e0a8; border-radius: 8px; padding: 10px 14px;
+}
+
+@media (max-width: 720px) {
+  .summary { grid-template-columns: 1fr; }
+  .form-grid { grid-template-columns: 1fr 1fr; }
+}
