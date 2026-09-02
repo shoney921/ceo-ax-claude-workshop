@@ -28,6 +28,10 @@ var editingRow = null;      // 지금 수정 중인 시트 행 번호 (없으면
 
 function $(id) { return document.getElementById(id); }
 
+// Google 라이브러리가 돌려주는 객체는 진짜 Promise가 아니라서 .catch(오류 잡기)를 못 씁니다.
+// 표준 Promise로 한 번 감싸 주면 .then / .catch 를 정상적으로 쓸 수 있습니다.
+function asPromise(req) { return Promise.resolve(req); }
+
 // 숫자를 1,234 형태로
 function won(n) { return Number(n || 0).toLocaleString("ko-KR"); }
 
@@ -106,7 +110,7 @@ function explainError(err) {
 
 function gapiLoaded() {
   gapi.load("client", function () {
-    gapi.client.init({ discoveryDocs: [DISCOVERY_DOC] }).then(function () {
+    asPromise(gapi.client.init({ discoveryDocs: [DISCOVERY_DOC] })).then(function () {
       gapiReady = true;
       maybeReady();
     }, function (err) {
@@ -182,10 +186,10 @@ function loadAll() {
   setStatus("시트에서 데이터를 읽는 중입니다…", "busy");
   editingRow = null;
 
-  gapi.client.sheets.spreadsheets.values.get({
+  asPromise(gapi.client.sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     range: range(SHEET_NAME, "A:" + LAST_COL)
-  }).then(function (res) {
+  })).then(function (res) {
     handleMainRows(res.result.values || []);
     return loadLookupLists();          // 자재·거래처 목록 (없어도 앱은 동작)
   }).then(function () {
@@ -232,12 +236,12 @@ function handleMainRows(rows) {
 // 자재 탭 / 거래처 탭에서 드롭다운 목록을 채웁니다
 function loadLookupLists() {
   return Promise.all([
-    gapi.client.sheets.spreadsheets.values.get({
+    asPromise(gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID, range: range(ITEM_SHEET_NAME, "A:D")
-    }).catch(function () { return null; }),
-    gapi.client.sheets.spreadsheets.values.get({
+    })).catch(function () { return null; }),
+    asPromise(gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID, range: range(VENDOR_SHEET_NAME, "A:A")
-    }).catch(function () { return null; })
+    })).catch(function () { return null; })
   ]).then(function (res) {
     // 자재: 자재명 + 단위 (수량 옆에 단위를 보여 주려고 함께 읽습니다)
     itemList = [];
@@ -448,12 +452,12 @@ function buildEditRow(rec) {
     save.disabled = true; cancel.disabled = true;
     setStatus("시트의 " + rec.row + "행을 수정하는 중입니다…", "busy");
 
-    gapi.client.sheets.spreadsheets.values.update({
+    asPromise(gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
       range: range(SHEET_NAME, "A" + rec.row + ":" + LAST_COL + rec.row),
       valueInputOption: "RAW",
       resource: { values: [rowFromRecord(updated)] }
-    }).then(function () {
+    })).then(function () {
       for (var i = 0; i < records.length; i++) {
         if (records[i].row === rec.row) { records[i] = updated; break; }
       }
@@ -532,13 +536,13 @@ function onAddClick() {
   $("btn-add").disabled = true;
   setStatus("시트에 새 행을 추가하는 중입니다…", "busy");
 
-  gapi.client.sheets.spreadsheets.values.append({
+  asPromise(gapi.client.sheets.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
     range: range(SHEET_NAME, "A:" + LAST_COL),
     valueInputOption: "RAW",
     insertDataOption: "INSERT_ROWS",
     resource: { values: [rowFromRecord(rec)] }
-  }).then(function (res) {
+  })).then(function (res) {
     // 시트가 알려 준 "실제로 들어간 위치"에서 행 번호를 꺼냅니다
     var updatedRange = (res.result.updates && res.result.updates.updatedRange) || "";
     var m = updatedRange.match(/!\$?[A-Z]+\$?(\d+)/);
