@@ -1,0 +1,27 @@
+# 실제 업무 데이터 (GitHub은 공개 저장소입니다 — 올리지 마세요)
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+*.tsv
+
+# 비밀 값
+*secret*
+*credentials*
+client_secret*.json
+service-account*.json
+.env
+.env.*
+
+# 개인정보가 담길 수 있는 캡처
+*.png
+*.jpg
+*.jpeg
+!docs/**/*.png
+
+# 운영체제·편집기가 만드는 파일
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
