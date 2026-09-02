@@ -1,28 +1,82 @@
 /* ============================================================
    app.js — 화면 동작 + Google Sheets 연결
+   - 화면 3개: 입고 내역 / 거래처 / 자재  (왼쪽 사이드바로 전환)
    - 하는 일: 조회(읽기) · 추가 · 수정   (삭제 기능은 없습니다)
    - 설정값(시트 ID, 탭 이름, 클라이언트 ID)은 config.js에 있습니다
    ============================================================ */
 
 /* ---------- 0. 기본 설정 ---------- */
 
-// 시트를 읽고 쓰는 권한 하나만 요청합니다
 var SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 var DISCOVERY_DOC = "https://sheets.googleapis.com/$discovery/rest?version=v4";
 
-// 입고기록 탭의 열 순서 (A~H). 시트의 1행과 같아야 합니다.
-var COLUMNS = ["날짜", "자재명", "수량", "단가", "금액", "거래처", "담당자", "비고"];
-var LAST_COL = "H"; // 열이 8개라서 A~H
+/* 화면 3개의 설계도입니다.
+   시트의 탭 하나 = 화면 하나 = 아래 항목 하나.
+   시트에 열을 추가하셨다면 여기 cols에도 같은 이름을 같은 순서로 넣으면 됩니다. */
+var TABLES = [
+  {
+    key: "inbound",
+    label: "입고 내역",
+    icon: "📥",
+    desc: "자재가 들어온 내역을 기록합니다",
+    addTitle: "+ 입고 추가",
+    sheet: SHEET_NAME,
+    lastCol: "H",
+    sortByDateDesc: true,
+    cols: [
+      { name: "날짜",   type: "date",     required: true },
+      { name: "자재명", type: "select",   required: true, fromTable: "item",   fromCol: "자재명" },
+      { name: "수량",   type: "number",   required: true, num: true, min: 1,
+        unitOf: { table: "item", matchField: "자재명", keyCol: "자재명", valueCol: "단위" } },
+      { name: "단가",   type: "number",   required: true, num: true, min: 0 },
+      { name: "금액",   type: "computed", num: true, from: ["수량", "단가"] },
+      { name: "거래처", type: "select",   required: true, fromTable: "vendor", fromCol: "거래처명" },
+      { name: "담당자", type: "text",     suggest: true },
+      { name: "비고",   type: "text" }
+    ]
+  },
+  {
+    key: "vendor",
+    label: "거래처",
+    icon: "🏢",
+    desc: "자재를 사 오는 회사들을 관리합니다",
+    addTitle: "+ 거래처 추가",
+    sheet: VENDOR_SHEET_NAME,
+    lastCol: "F",
+    cols: [
+      { name: "거래처명", type: "text", required: true },
+      { name: "담당자",   type: "text" },
+      { name: "연락처",   type: "text" },
+      { name: "이메일",   type: "text" },
+      { name: "결제조건", type: "text", suggest: true },
+      { name: "비고",     type: "text" }
+    ]
+  },
+  {
+    key: "item",
+    label: "자재",
+    icon: "📦",
+    desc: "취급하는 자재 목록을 관리합니다",
+    addTitle: "+ 자재 추가",
+    sheet: ITEM_SHEET_NAME,
+    lastCol: "D",
+    cols: [
+      { name: "자재명",   type: "text",   required: true },
+      { name: "분류",     type: "text",   suggest: true },
+      { name: "단위",     type: "text",   suggest: true },
+      { name: "안전재고", type: "number", num: true, min: 0 }
+    ]
+  }
+];
 
-// 화면이 기억하고 있는 것들
-var gapiReady = false;      // Google API 라이브러리 준비됨
-var gisReady = false;       // Google 로그인 라이브러리 준비됨
-var tokenClient = null;     // 로그인 창을 띄우는 객체
-var connected = false;      // 로그인이 끝났는지
-var records = [];           // 입고기록 (행 번호와 값을 함께 보관)
-var itemList = [];          // 자재 탭에서 읽은 목록
-var vendorList = [];        // 거래처 탭에서 읽은 목록
-var editingRow = null;      // 지금 수정 중인 시트 행 번호 (없으면 null)
+/* 화면이 기억하고 있는 것들 */
+var gapiReady = false;
+var gisReady = false;
+var tokenClient = null;
+var connected = false;
+var currentView = "inbound";        // 지금 보고 있는 화면
+var data = {};                      // data["inbound"] = [{row: 2, v: {날짜: "...", ...}}, ...]
+var editing = {};                   // editing["inbound"] = 수정 중인 시트 행 번호
 
 /* ---------- 1. 자주 쓰는 도우미 함수들 ---------- */
 
@@ -31,6 +85,11 @@ function $(id) { return document.getElementById(id); }
 // Google 라이브러리가 돌려주는 객체는 진짜 Promise가 아니라서 .catch(오류 잡기)를 못 씁니다.
 // 표준 Promise로 한 번 감싸 주면 .then / .catch 를 정상적으로 쓸 수 있습니다.
 function asPromise(req) { return Promise.resolve(req); }
+
+function tableOf(key) {
+  for (var i = 0; i < TABLES.length; i++) if (TABLES[i].key === key) return TABLES[i];
+  return null;
+}
 
 // 숫자를 1,234 형태로
 function won(n) { return Number(n || 0).toLocaleString("ko-KR"); }
@@ -43,19 +102,15 @@ function toNumber(v) {
 }
 
 // 날짜를 항상 YYYY-MM-DD 로 맞춥니다
-// (시트가 "2025. 6. 2." 처럼 보여 주거나 숫자로 돌려주는 경우까지 대비)
 function normalizeDate(v) {
   if (v === null || v === undefined || v === "") return "";
-  if (typeof v === "number") {                       // 구글 시트의 날짜 일련번호
+  if (typeof v === "number") {
     var base = Date.UTC(1899, 11, 30);
-    var d = new Date(base + v * 86400000);
-    return d.toISOString().slice(0, 10);
+    return new Date(base + v * 86400000).toISOString().slice(0, 10);
   }
   var s = String(v).trim();
   var m = s.match(/^(\d{4})\s*[-.\/]?\s*(\d{1,2})\s*[-.\/]?\s*(\d{1,2})\s*\.?$/);
-  if (m) {
-    return m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2);
-  }
+  if (m) return m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2);
   return s;
 }
 
@@ -64,23 +119,37 @@ function todayStr() {
   return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2);
 }
 
-// 화면 위쪽 안내줄에 상황을 알려 줍니다
 function setStatus(html, kind) {
   var el = $("status");
   el.className = "status" + (kind ? " " + kind : "");
   el.innerHTML = html;
 }
 
-// 폼 옆에 짧은 결과 메시지
-function setFormMsg(text, kind) {
-  var el = $("form-msg");
+function setFormMsg(key, text, kind) {
+  var el = $("msg-" + key);
+  if (!el) return;
   el.className = "form-msg" + (kind ? " " + kind : "");
   el.textContent = text;
 }
 
-// 시트 범위 문자열 (탭 이름에 한글·공백이 있어도 되도록 작은따옴표로 감쌉니다)
+// 시트 범위 (탭 이름에 한글·공백이 있어도 되도록 작은따옴표로 감쌉니다)
 function range(sheetName, a1) {
   return "'" + String(sheetName).replace(/'/g, "''") + "'!" + a1;
+}
+
+// 한국어 조사 고르기 — 받침이 있으면 "을", 없으면 "를" (예: 자재명을 / 거래처를)
+function josa(word) {
+  var last = String(word || "").slice(-1);
+  var code = last.charCodeAt(0);
+  if (isNaN(code) || code < 0xAC00 || code > 0xD7A3) return "을(를)";
+  return (code - 0xAC00) % 28 !== 0 ? "을" : "를";
+}
+
+// 중복 없는 목록 만들기 (가나다순)
+function uniq(arr) {
+  var out = [];
+  arr.forEach(function (v) { if (v !== "" && v !== undefined && v !== null && out.indexOf(v) === -1) out.push(v); });
+  return out.sort(function (a, b) { return String(a).localeCompare(String(b), "ko"); });
 }
 
 // Google이 돌려준 오류를 사람 말로 바꿔 줍니다
@@ -100,13 +169,12 @@ function explainError(err) {
     return "시트를 찾지 못했습니다. <code>config.js</code>의 <b>SPREADSHEET_ID</b>가 맞는지 확인해 주세요. (원래 메시지: " + msg + ")";
   }
   if (/Unable to parse range/i.test(msg)) {
-    return "탭 이름이 실제 시트와 다릅니다. <code>config.js</code>의 <b>SHEET_NAME</b>을 시트 아래쪽 탭 이름과 글자 하나까지 똑같이 맞춰 주세요. (원래 메시지: " + msg + ")";
+    return "탭 이름이 실제 시트와 다릅니다. <code>config.js</code>의 탭 이름을 시트 아래쪽 탭과 글자 하나까지 똑같이 맞춰 주세요. (원래 메시지: " + msg + ")";
   }
   return "문제가 생겼습니다: " + msg;
 }
 
 /* ---------- 2. Google 라이브러리 준비 ---------- */
-/* index.html에서 라이브러리를 다 읽으면 아래 두 함수를 불러 줍니다 */
 
 function gapiLoaded() {
   gapi.load("client", function () {
@@ -141,16 +209,15 @@ function gisLoaded() {
   }
 }
 
-// 두 라이브러리가 모두 준비되면 연결 버튼을 켭니다
 function maybeReady() {
   if (!gapiReady || !gisReady) return;
 
   if (!CLIENT_ID || CLIENT_ID.indexOf("apps.googleusercontent.com") === -1) {
-    setStatus("아직 <code>config.js</code>에 <b>CLIENT_ID</b>가 들어 있지 않습니다. Google Cloud에서 만든 클라이언트 ID를 넣어 주세요.", "error");
+    setStatus("아직 <code>config.js</code>에 <b>CLIENT_ID</b>가 들어 있지 않습니다.", "error");
     return;
   }
   if (!SPREADSHEET_ID || SPREADSHEET_ID.indexOf("여기에") === 0) {
-    setStatus("아직 <code>config.js</code>에 <b>SPREADSHEET_ID</b>가 들어 있지 않습니다. 시트 주소의 <code>/d/</code>와 <code>/edit</code> 사이 값을 넣어 주세요.", "error");
+    setStatus("아직 <code>config.js</code>에 <b>SPREADSHEET_ID</b>가 들어 있지 않습니다.", "error");
     return;
   }
   updateConnectButton();
@@ -166,189 +233,377 @@ function updateConnectButton() {
     btn.textContent = gapiReady && gisReady ? "Google 계정으로 연결" : "준비 중…";
     btn.className = "btn-connect";
   }
-  $("btn-add").disabled = !connected;
+  TABLES.forEach(function (t) {
+    var b = $("add-" + t.key);
+    if (b) b.disabled = !connected;
+  });
 }
 
-/* ---------- 3. 연결 버튼 ---------- */
-
 function onConnectClick() {
-  if (connected) {            // 이미 연결돼 있으면 다시 읽어 오기만
-    loadAll();
-    return;
-  }
+  if (connected) { loadAll(); return; }
   setStatus("Google 로그인 창을 띄우는 중입니다…", "busy");
   tokenClient.requestAccessToken({ prompt: "" });
 }
 
-/* ---------- 4. 조회 — 시트에서 읽어 오기 ---------- */
+/* ---------- 3. 조회 — 시트에서 읽어 오기 ---------- */
 
 function loadAll() {
   setStatus("시트에서 데이터를 읽는 중입니다…", "busy");
-  editingRow = null;
+  TABLES.forEach(function (t) { editing[t.key] = null; });
 
-  asPromise(gapi.client.sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: range(SHEET_NAME, "A:" + LAST_COL)
-  })).then(function (res) {
-    handleMainRows(res.result.values || []);
-    return loadLookupLists();          // 자재·거래처 목록 (없어도 앱은 동작)
-  }).then(function () {
-    setStatus("불러왔습니다. 총 <b>" + records.length + "건</b>입니다. (시트: " + SHEET_NAME + ")", "ok");
+  var jobs = TABLES.map(function (t) {
+    return asPromise(gapi.client.sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: range(t.sheet, "A:" + t.lastCol)
+    })).then(function (res) {
+      return { table: t, rows: res.result.values || [] };
+    });
+  });
+
+  Promise.all(jobs).then(function (results) {
+    var warnings = [];
+    results.forEach(function (r) {
+      var w = absorbRows(r.table, r.rows);
+      if (w) warnings.push(w);
+    });
+    renderAll();
+
+    if (warnings.length) {
+      setStatus("⚠️ " + warnings.join("<br>"), "error");
+    } else {
+      var counts = TABLES.map(function (t) { return t.label + " " + data[t.key].length + "건"; });
+      setStatus("불러왔습니다 — " + counts.join(" · ") + ".", "ok");
+    }
   }).catch(function (err) {
     setStatus(explainError(err), "error");
   });
 }
 
-function handleMainRows(rows) {
+// 시트에서 읽은 줄들을 화면이 쓰는 형태로 바꿉니다. 문제가 있으면 경고 문구를 돌려줍니다.
+function absorbRows(t, rows) {
   var header = rows.length ? rows[0] : [];
+  var warning = null;
 
-  // 시트의 1행이 우리가 아는 열 이름과 다르면 알려 줍니다 (원본 시트가 항상 기준)
-  var mismatch = COLUMNS.filter(function (c, i) {
-    return String(header[i] || "").trim() !== c;
+  var mismatch = t.cols.filter(function (c, i) {
+    return String(header[i] || "").trim() !== c.name;
   });
   if (rows.length && mismatch.length) {
-    setStatus("⚠️ 시트의 열 이름이 예상과 다릅니다. 시트 1행: <b>" +
-      header.join(" / ") + "</b> · 앱이 기대하는 순서: <b>" + COLUMNS.join(" / ") +
-      "</b>. 열 순서를 맞추거나 알려 주세요.", "error");
+    warning = "<b>" + t.label + "</b> 탭(" + t.sheet + ")의 열 이름이 예상과 다릅니다. " +
+      "시트 1행: <b>" + header.join(" / ") + "</b> · 앱이 기대하는 순서: <b>" +
+      t.cols.map(function (c) { return c.name; }).join(" / ") + "</b>";
   }
 
-  records = [];
+  var list = [];
   for (var i = 1; i < rows.length; i++) {
-    var r = rows[i] || [];
-    if (r.join("").trim() === "") continue;      // 완전히 빈 행은 건너뜀
-    records.push({
-      row: i + 1,                                 // 시트에서의 실제 행 번호
-      date: normalizeDate(r[0]),
-      item: r[1] || "",
-      qty: toNumber(r[2]),
-      price: toNumber(r[3]),
-      amount: r[4] === undefined || r[4] === "" ? toNumber(r[2]) * toNumber(r[3]) : toNumber(r[4]),
-      vendor: r[5] || "",
-      manager: r[6] || "",
-      note: r[7] || ""
+    var raw = rows[i] || [];
+    if (raw.join("").trim() === "") continue;
+    var v = {};
+    t.cols.forEach(function (c, ci) {
+      var val = raw[ci];
+      if (c.type === "date") v[c.name] = normalizeDate(val);
+      else if (c.num) v[c.name] = toNumber(val);
+      else v[c.name] = val === undefined || val === null ? "" : String(val);
+    });
+    // 금액처럼 계산으로 채우는 열이 비어 있으면 계산해서 채웁니다
+    t.cols.forEach(function (c) {
+      if (c.type === "computed" && !raw[t.cols.indexOf(c)]) v[c.name] = computeValue(c, v);
+    });
+    list.push({ row: i + 1, v: v });
+  }
+  data[t.key] = list;
+  return warning;
+}
+
+function computeValue(col, v) {
+  var n = 1;
+  col.from.forEach(function (f) { n *= toNumber(v[f]); });
+  return n;
+}
+
+/* ---------- 4. 사이드바 메뉴와 화면 틀 만들기 ---------- */
+
+function buildNav() {
+  var nav = $("nav");
+  nav.innerHTML = "";
+  TABLES.forEach(function (t) {
+    var a = document.createElement("button");
+    a.type = "button";
+    a.className = "nav-item" + (t.key === currentView ? " active" : "");
+    a.id = "nav-" + t.key;
+    a.innerHTML = '<span class="nav-icon">' + t.icon + '</span><span class="nav-label">' + t.label + '</span>' +
+                  '<span class="nav-count" id="navcount-' + t.key + '"></span>';
+    a.addEventListener("click", function () { switchView(t.key); });
+    nav.appendChild(a);
+  });
+}
+
+function switchView(key) {
+  currentView = key;
+  TABLES.forEach(function (t) {
+    var nav = $("nav-" + t.key);
+    var view = $("view-" + t.key);
+    if (nav) nav.className = "nav-item" + (t.key === key ? " active" : "");
+    if (view) view.hidden = t.key !== key;
+  });
+}
+
+function buildViews() {
+  var host = $("views");
+  host.innerHTML = "";
+
+  TABLES.forEach(function (t) {
+    var view = document.createElement("section");
+    view.className = "view";
+    view.id = "view-" + t.key;
+    view.hidden = t.key !== currentView;
+
+    var head = document.createElement("header");
+    head.className = "view-head";
+    head.innerHTML = "<h1>" + t.icon + " " + t.label + "</h1><p>" + t.desc + "</p>";
+    view.appendChild(head);
+
+    var summary = document.createElement("div");
+    summary.className = "summary";
+    summary.id = "sum-" + t.key;
+    view.appendChild(summary);
+
+    // 추가 폼
+    var addCard = document.createElement("section");
+    addCard.className = "card";
+    addCard.innerHTML =
+      "<h2>" + t.addTitle + "</h2>" +
+      '<div class="form-grid" id="form-' + t.key + '"></div>' +
+      '<div class="form-actions">' +
+        '<span class="form-msg" id="msg-' + t.key + '"></span>' +
+        '<button class="btn-add" type="button" id="add-' + t.key + '" disabled>추가</button>' +
+      "</div>";
+    view.appendChild(addCard);
+
+    // 목록
+    var listCard = document.createElement("section");
+    listCard.className = "card";
+    listCard.innerHTML =
+      '<h2>목록 <span class="muted" id="count-' + t.key + '"></span></h2>' +
+      '<div class="table-scroll"><table>' +
+        '<thead id="head-' + t.key + '"></thead><tbody id="body-' + t.key + '"></tbody>' +
+      "</table></div>";
+    view.appendChild(listCard);
+
+    host.appendChild(view);
+
+    buildForm(t);
+    buildTableHead(t);
+    $("add-" + t.key).addEventListener("click", function () { onAdd(t); });
+  });
+}
+
+/* ---------- 5. 입력 폼 ---------- */
+
+// 이 열의 선택지 목록을 구합니다 (다른 탭에서 가져오거나, 이미 입력된 값들에서 모으거나)
+function optionsFor(t, col) {
+  if (col.fromTable) {
+    var src = data[col.fromTable] || [];
+    return uniq(src.map(function (r) { return r.v[col.fromCol]; }));
+  }
+  return uniq((data[t.key] || []).map(function (r) { return r.v[col.name]; }));
+}
+
+function buildForm(t) {
+  var grid = $("form-" + t.key);
+  grid.innerHTML = "";
+
+  t.cols.forEach(function (col) {
+    var field = document.createElement("div");
+    field.className = "field" + (col.type === "computed" ? " readonly" : "");
+
+    var label = document.createElement("label");
+    var inputId = "f-" + t.key + "-" + col.name;
+    label.setAttribute("for", inputId);
+    label.innerHTML = col.name +
+      (col.required ? ' <span class="req">*</span>' : "") +
+      (col.type === "computed" ? " <span class='muted'>(" + col.from.join(" × ") + ", 자동)</span>" : "") +
+      (col.unitOf ? ' <span class="unit" id="unit-' + t.key + '"></span>' : "");
+    field.appendChild(label);
+
+    var input;
+    if (col.type === "select") {
+      input = document.createElement("select");
+    } else if (col.type === "computed") {
+      input = document.createElement("input");
+      input.type = "text";
+      input.readOnly = true;
+      input.tabIndex = -1;
+      input.value = "0";
+    } else {
+      input = document.createElement("input");
+      input.type = col.type === "date" ? "date" : (col.type === "number" ? "number" : "text");
+      if (col.type === "number") { input.min = col.min === undefined ? 0 : col.min; input.step = 1; input.placeholder = "0"; }
+      if (col.suggest) {
+        var dlId = "dl-" + t.key + "-" + col.name;
+        input.setAttribute("list", dlId);
+        var dl = document.createElement("datalist");
+        dl.id = dlId;
+        field.appendChild(dl);
+      }
+      if (!col.required && col.type === "text") input.placeholder = "(선택)";
+    }
+    input.id = inputId;
+    field.insertBefore(input, field.children[1] || null);
+    grid.appendChild(field);
+  });
+
+  // 계산 열(금액)이 있으면, 재료가 되는 칸을 입력할 때마다 다시 계산합니다
+  t.cols.forEach(function (col) {
+    if (col.type !== "computed") return;
+    col.from.forEach(function (f) {
+      var el = $("f-" + t.key + "-" + f);
+      if (el) el.addEventListener("input", function () { recalcForm(t); });
+    });
+  });
+
+  // 단위 표시(수량 옆 "(개)")를 위해 연결된 칸의 변경을 지켜봅니다
+  t.cols.forEach(function (col) {
+    if (!col.unitOf) return;
+    var el = $("f-" + t.key + "-" + col.unitOf.matchField);
+    if (el) el.addEventListener("change", function () { updateUnitLabel(t); });
+  });
+
+  if (t.key === "inbound") {
+    var d = $("f-inbound-날짜");
+    if (d) d.value = todayStr();
+  }
+  recalcForm(t);
+}
+
+function recalcForm(t) {
+  t.cols.forEach(function (col) {
+    if (col.type !== "computed") return;
+    var v = {};
+    col.from.forEach(function (f) {
+      var el = $("f-" + t.key + "-" + f);
+      v[f] = el ? el.value : 0;
+    });
+    var out = $("f-" + t.key + "-" + col.name);
+    if (out) out.value = won(computeValue(col, v));
+  });
+}
+
+function updateUnitLabel(t) {
+  t.cols.forEach(function (col) {
+    if (!col.unitOf) return;
+    var span = $("unit-" + t.key);
+    if (!span) return;
+    var picked = $("f-" + t.key + "-" + col.unitOf.matchField);
+    var name = picked ? picked.value : "";
+    var unit = "";
+    (data[col.unitOf.table] || []).forEach(function (r) {
+      if (r.v[col.unitOf.keyCol] === name) unit = r.v[col.unitOf.valueCol];
+    });
+    span.textContent = unit ? "(" + unit + ")" : "";
+  });
+}
+
+// 드롭다운·자동완성 목록을 최신 데이터로 채웁니다
+function refreshFormChoices(t) {
+  t.cols.forEach(function (col) {
+    if (col.type === "select") {
+      var sel = $("f-" + t.key + "-" + col.name);
+      if (!sel) return;
+      var current = sel.value;
+      var list = optionsFor(t, col);
+      sel.innerHTML = "";
+      var o0 = document.createElement("option");
+      o0.value = "";
+      o0.textContent = "— " + col.name + josa(col.name) + " 고르세요 —";
+      sel.appendChild(o0);
+      list.forEach(function (v) {
+        var o = document.createElement("option");
+        o.value = v; o.textContent = v;
+        sel.appendChild(o);
+      });
+      if (list.indexOf(current) !== -1) sel.value = current;
+    } else if (col.suggest) {
+      var dl = $("dl-" + t.key + "-" + col.name);
+      if (!dl) return;
+      dl.innerHTML = "";
+      optionsFor(t, col).forEach(function (v) {
+        var o = document.createElement("option");
+        o.value = v;
+        dl.appendChild(o);
+      });
+    }
+  });
+  updateUnitLabel(t);
+}
+
+/* ---------- 6. 표 그리기 ---------- */
+
+function buildTableHead(t) {
+  var thead = $("head-" + t.key);
+  var tr = document.createElement("tr");
+  t.cols.forEach(function (col) {
+    var th = document.createElement("th");
+    if (col.num) th.className = "num";
+    th.textContent = col.name;
+    tr.appendChild(th);
+  });
+  tr.appendChild(document.createElement("th"));
+  thead.innerHTML = "";
+  thead.appendChild(tr);
+}
+
+function sortedRows(t) {
+  var list = (data[t.key] || []).slice();
+  if (t.sortByDateDesc) {
+    var dateCol = t.cols[0].name;
+    list.sort(function (a, b) {
+      if (a.v[dateCol] === b.v[dateCol]) return b.row - a.row;
+      return a.v[dateCol] < b.v[dateCol] ? 1 : -1;
     });
   }
-  renderTable();
-  renderSummary();
-  fillManagerList();
+  return list;
 }
 
-// 자재 탭 / 거래처 탭에서 드롭다운 목록을 채웁니다
-function loadLookupLists() {
-  return Promise.all([
-    asPromise(gapi.client.sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID, range: range(ITEM_SHEET_NAME, "A:D")
-    })).catch(function () { return null; }),
-    asPromise(gapi.client.sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID, range: range(VENDOR_SHEET_NAME, "A:A")
-    })).catch(function () { return null; })
-  ]).then(function (res) {
-    // 자재: 자재명 + 단위 (수량 옆에 단위를 보여 주려고 함께 읽습니다)
-    itemList = [];
-    if (res[0] && res[0].result.values) {
-      res[0].result.values.slice(1).forEach(function (r) {
-        if (r && r[0]) itemList.push({ name: r[0], unit: r[2] || "" });
-      });
-    }
-    vendorList = [];
-    if (res[1] && res[1].result.values) {
-      res[1].result.values.slice(1).forEach(function (r) {
-        if (r && r[0]) vendorList.push(r[0]);
-      });
-    }
-    // 목록 탭을 못 읽었으면 지금까지 입력된 값에서 만들어 씁니다
-    if (!itemList.length) {
-      uniq(records.map(function (r) { return r.item; })).forEach(function (n) {
-        itemList.push({ name: n, unit: "" });
-      });
-    }
-    if (!vendorList.length) {
-      vendorList = uniq(records.map(function (r) { return r.vendor; }));
-    }
-    fillSelect($("f-item"), itemList.map(function (o) { return o.name; }), "자재를 고르세요");
-    fillSelect($("f-vendor"), vendorList, "거래처를 고르세요");
-    updateUnitLabel();
+function renderAll() {
+  TABLES.forEach(function (t) {
+    refreshFormChoices(t);
+    renderTable(t);
+    renderSummary(t);
+    var nc = $("navcount-" + t.key);
+    if (nc) nc.textContent = (data[t.key] || []).length || "";
   });
 }
 
-function uniq(arr) {
-  var out = [];
-  arr.forEach(function (v) { if (v && out.indexOf(v) === -1) out.push(v); });
-  return out.sort(function (a, b) { return a.localeCompare(b, "ko"); });
-}
-
-function fillSelect(sel, list, placeholder) {
-  var current = sel.value;
-  sel.innerHTML = "";
-  var opt0 = document.createElement("option");
-  opt0.value = ""; opt0.textContent = "— " + placeholder + " —";
-  sel.appendChild(opt0);
-  list.forEach(function (v) {
-    var o = document.createElement("option");
-    o.value = v; o.textContent = v;
-    sel.appendChild(o);
-  });
-  if (list.indexOf(current) !== -1) sel.value = current;
-}
-
-function fillManagerList() {
-  var dl = $("mgr-list");
-  dl.innerHTML = "";
-  uniq(records.map(function (r) { return r.manager; })).forEach(function (v) {
-    var o = document.createElement("option");
-    o.value = v;
-    dl.appendChild(o);
-  });
-}
-
-/* ---------- 5. 화면 그리기 ---------- */
-
-function sortedRecords() {
-  return records.slice().sort(function (a, b) {
-    if (a.date === b.date) return b.row - a.row;   // 같은 날이면 나중에 넣은 것이 위로
-    return a.date < b.date ? 1 : -1;               // 최근 날짜가 위로
-  });
-}
-
-function renderTable() {
-  var tbody = $("tbody");
+function renderTable(t) {
+  var tbody = $("body-" + t.key);
   tbody.innerHTML = "";
-  var list = sortedRecords();
-
-  $("row-count").textContent = list.length ? "· " + list.length + "건" : "";
+  var list = sortedRows(t);
+  $("count-" + t.key).textContent = list.length ? "· " + list.length + "건" : "";
 
   if (!list.length) {
     var tr = document.createElement("tr");
     tr.className = "empty-row";
     var td = document.createElement("td");
-    td.colSpan = 9;
-    td.textContent = connected ? "시트에 아직 입고 기록이 없습니다. 위에서 첫 건을 추가해 보세요." : "아직 연결 전입니다. 위의 “Google 계정으로 연결” 버튼을 눌러 주세요.";
+    td.colSpan = t.cols.length + 1;
+    td.textContent = connected
+      ? "시트의 " + t.sheet + " 탭에 아직 내용이 없습니다. 위에서 첫 건을 추가해 보세요."
+      : "아직 연결 전입니다. 왼쪽 아래 “Google 계정으로 연결” 버튼을 눌러 주세요.";
     tr.appendChild(td);
     tbody.appendChild(tr);
     return;
   }
 
   list.forEach(function (rec) {
-    tbody.appendChild(rec.row === editingRow ? buildEditRow(rec) : buildViewRow(rec));
+    tbody.appendChild(rec.row === editing[t.key] ? buildEditRow(t, rec) : buildViewRow(t, rec));
   });
 }
 
-function buildViewRow(rec) {
+function buildViewRow(t, rec) {
   var tr = document.createElement("tr");
-  var cells = [
-    { text: rec.date },
-    { text: rec.item },
-    { text: won(rec.qty), num: true },
-    { text: won(rec.price), num: true },
-    { text: won(rec.amount), num: true },
-    { text: rec.vendor },
-    { text: rec.manager },
-    { text: rec.note }
-  ];
-  cells.forEach(function (c) {
+  t.cols.forEach(function (col) {
     var td = document.createElement("td");
-    if (c.num) td.className = "num";
-    td.textContent = c.text;
+    if (col.num) td.className = "num";
+    td.textContent = col.num ? won(rec.v[col.name]) : rec.v[col.name];
     tr.appendChild(td);
   });
 
@@ -357,69 +612,65 @@ function buildViewRow(rec) {
   btn.type = "button";
   btn.className = "btn-edit";
   btn.textContent = "수정";
-  btn.disabled = editingRow !== null;
+  btn.disabled = editing[t.key] !== null && editing[t.key] !== undefined;
   btn.addEventListener("click", function () {
-    editingRow = rec.row;
-    renderTable();
+    editing[t.key] = rec.row;
+    renderTable(t);
   });
   tdBtn.appendChild(btn);
   tr.appendChild(tdBtn);
   return tr;
 }
 
-function buildEditRow(rec) {
+function buildEditRow(t, rec) {
   var tr = document.createElement("tr");
   tr.className = "editing";
+  var inputs = {};
 
-  function cell(node, cls) {
+  t.cols.forEach(function (col) {
     var td = document.createElement("td");
-    if (cls) td.className = cls;
-    td.appendChild(node);
-    return td;
-  }
-  function input(type, value, cls) {
-    var el = document.createElement("input");
-    el.type = type; el.value = value;
-    if (cls) el.className = cls;
-    return el;
-  }
-  function select(list, value) {
-    var el = document.createElement("select");
-    var vals = list.slice();
-    if (value && vals.indexOf(value) === -1) vals.unshift(value);  // 목록에 없는 기존 값도 유지
-    vals.forEach(function (v) {
-      var o = document.createElement("option");
-      o.value = v; o.textContent = v;
-      el.appendChild(o);
-    });
-    el.value = value;
-    return el;
-  }
+    if (col.num) td.className = "num";
 
-  var eDate = input("date", rec.date);
-  var eItem = select(itemList.map(function (o) { return o.name; }), rec.item);
-  var eQty = input("number", rec.qty, "num");
-  var ePrice = input("number", rec.price, "num");
-  var eVendor = select(vendorList, rec.vendor);
-  var eMgr = input("text", rec.manager);
-  eMgr.setAttribute("list", "mgr-list");
-  var eNote = input("text", rec.note);
+    if (col.type === "computed") {
+      td.className = "amount-cell";
+      td.textContent = won(rec.v[col.name]);
+      inputs[col.name] = { cell: td };
+    } else if (col.type === "select") {
+      var sel = document.createElement("select");
+      var list = optionsFor(t, col).slice();
+      var cur = rec.v[col.name];
+      if (cur && list.indexOf(cur) === -1) list.unshift(cur);   // 목록에 없는 기존 값도 유지
+      list.forEach(function (v) {
+        var o = document.createElement("option");
+        o.value = v; o.textContent = v;
+        sel.appendChild(o);
+      });
+      sel.value = cur;
+      td.appendChild(sel);
+      inputs[col.name] = { el: sel };
+    } else {
+      var el = document.createElement("input");
+      el.type = col.type === "date" ? "date" : (col.type === "number" ? "number" : "text");
+      if (col.num) el.className = "num";
+      if (col.suggest) el.setAttribute("list", "dl-" + t.key + "-" + col.name);
+      el.value = rec.v[col.name];
+      td.appendChild(el);
+      inputs[col.name] = { el: el };
+    }
+    tr.appendChild(td);
+  });
 
-  var tdAmount = document.createElement("td");
-  tdAmount.className = "amount-cell";
-  function recalc() { tdAmount.textContent = won(toNumber(eQty.value) * toNumber(ePrice.value)); }
-  eQty.addEventListener("input", recalc);
-  ePrice.addEventListener("input", recalc);
-  recalc();
-
-  tr.appendChild(cell(eDate));
-  tr.appendChild(cell(eItem));
-  tr.appendChild(cell(eQty, "num"));
-  tr.appendChild(cell(ePrice, "num"));
-  tr.appendChild(tdAmount);
-  tr.appendChild(cell(eVendor));
-  tr.appendChild(cell(eMgr));
-  tr.appendChild(cell(eNote));
+  // 수정 중에도 금액이 실시간으로 계산되게 합니다
+  t.cols.forEach(function (col) {
+    if (col.type !== "computed") return;
+    function recalc() {
+      var v = {};
+      col.from.forEach(function (f) { v[f] = inputs[f].el.value; });
+      inputs[col.name].cell.textContent = won(computeValue(col, v));
+    }
+    col.from.forEach(function (f) { inputs[f].el.addEventListener("input", recalc); });
+    recalc();
+  });
 
   var tdBtns = document.createElement("td");
   var save = document.createElement("button");
@@ -428,44 +679,32 @@ function buildEditRow(rec) {
   cancel.type = "button"; cancel.className = "btn-cancel"; cancel.textContent = "취소";
 
   cancel.addEventListener("click", function () {
-    editingRow = null;
-    renderTable();
+    editing[t.key] = null;
+    renderTable(t);
   });
 
   save.addEventListener("click", function () {
-    var updated = {
-      row: rec.row,
-      date: normalizeDate(eDate.value),
-      item: eItem.value,
-      qty: toNumber(eQty.value),
-      price: toNumber(ePrice.value),
-      vendor: eVendor.value,
-      manager: eMgr.value.trim(),
-      note: eNote.value.trim()
-    };
-    updated.amount = updated.qty * updated.price;
+    var v = collectValues(t, function (col) {
+      return col.type === "computed" ? null : inputs[col.name].el.value;
+    });
+    var problem = validate(t, v);
+    if (problem) { setStatus(problem, "error"); return; }
 
-    if (!updated.date || !updated.item) {
-      setStatus("날짜와 자재명은 비워 둘 수 없습니다.", "error");
-      return;
-    }
     save.disabled = true; cancel.disabled = true;
-    setStatus("시트의 " + rec.row + "행을 수정하는 중입니다…", "busy");
+    setStatus(t.label + " " + rec.row + "행을 수정하는 중입니다…", "busy");
 
     asPromise(gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: range(SHEET_NAME, "A" + rec.row + ":" + LAST_COL + rec.row),
+      range: range(t.sheet, "A" + rec.row + ":" + t.lastCol + rec.row),
       valueInputOption: "RAW",
-      resource: { values: [rowFromRecord(updated)] }
+      resource: { values: [rowFromValues(t, v)] }
     })).then(function () {
-      for (var i = 0; i < records.length; i++) {
-        if (records[i].row === rec.row) { records[i] = updated; break; }
+      for (var i = 0; i < data[t.key].length; i++) {
+        if (data[t.key][i].row === rec.row) { data[t.key][i] = { row: rec.row, v: v }; break; }
       }
-      editingRow = null;
-      renderTable();
-      renderSummary();
-      fillManagerList();
-      setStatus("시트의 <b>" + rec.row + "행</b>을 수정했습니다.", "ok");
+      editing[t.key] = null;
+      renderAll();
+      setStatus("<b>" + t.label + "</b> 시트의 " + rec.row + "행을 수정했습니다.", "ok");
     }).catch(function (err) {
       save.disabled = false; cancel.disabled = false;
       setStatus(explainError(err), "error");
@@ -478,96 +717,150 @@ function buildEditRow(rec) {
   return tr;
 }
 
-// 기록 하나를 시트의 한 줄(A~H)로 바꿉니다
-function rowFromRecord(r) {
-  return [r.date, r.item, r.qty, r.price, r.amount, r.vendor, r.manager, r.note];
-}
+/* ---------- 7. 값 모으기 · 확인 · 저장 ---------- */
 
-function renderSummary() {
-  var total = 0;
-  var thisMonth = todayStr().slice(0, 7);
-  var monthCount = 0;
-  records.forEach(function (r) {
-    total += r.amount;
-    if (String(r.date).slice(0, 7) === thisMonth) monthCount++;
+// 각 열의 값을 읽어 하나의 묶음으로 만듭니다 (계산 열은 마지막에 채웁니다)
+function collectValues(t, readOne) {
+  var v = {};
+  t.cols.forEach(function (col) {
+    if (col.type === "computed") return;
+    var raw = readOne(col);
+    if (col.type === "date") v[col.name] = normalizeDate(raw);
+    else if (col.num) v[col.name] = toNumber(raw);
+    else v[col.name] = String(raw === null || raw === undefined ? "" : raw).trim();
   });
-  $("stat-count").textContent = won(records.length) + "건";
-  $("stat-amount").textContent = won(total) + "원";
-  $("stat-month").textContent = won(monthCount) + "건";
+  t.cols.forEach(function (col) {
+    if (col.type === "computed") v[col.name] = computeValue(col, v);
+  });
+  return v;
 }
 
-/* ---------- 6. 추가 — 시트 맨 아래에 새 행 넣기 ---------- */
-
-function updateUnitLabel() {
-  var name = $("f-item").value;
-  var found = null;
-  itemList.forEach(function (o) { if (o.name === name) found = o; });
-  $("f-unit").textContent = found && found.unit ? "(" + found.unit + ")" : "";
+function validate(t, v) {
+  for (var i = 0; i < t.cols.length; i++) {
+    var col = t.cols[i];
+    if (col.type === "computed") continue;
+    if (col.required && (v[col.name] === "" || v[col.name] === null)) {
+      return "<b>" + col.name + "</b>은(는) 반드시 입력해야 합니다.";
+    }
+    if (col.num && col.min !== undefined && v[col.name] < col.min) {
+      return "<b>" + col.name + "</b>은(는) " + col.min + " 이상이어야 합니다.";
+    }
+  }
+  return null;
 }
 
-function calcFormAmount() {
-  $("f-amount").value = won(toNumber($("f-qty").value) * toNumber($("f-price").value));
+// 값 묶음을 시트의 한 줄로 바꿉니다
+function rowFromValues(t, v) {
+  return t.cols.map(function (col) { return v[col.name]; });
 }
 
-function onAddClick() {
+function onAdd(t) {
   if (!connected) {
     setStatus("먼저 <b>Google 계정으로 연결</b> 버튼을 눌러 주세요.", "error");
     return;
   }
-  var rec = {
-    date: normalizeDate($("f-date").value),
-    item: $("f-item").value,
-    qty: toNumber($("f-qty").value),
-    price: toNumber($("f-price").value),
-    vendor: $("f-vendor").value,
-    manager: $("f-mgr").value.trim(),
-    note: $("f-note").value.trim()
-  };
-  rec.amount = rec.qty * rec.price;
+  var v = collectValues(t, function (col) {
+    var el = $("f-" + t.key + "-" + col.name);
+    return el ? el.value : "";
+  });
 
-  // 꼭 필요한 값 확인
-  if (!rec.date) { setFormMsg("날짜를 골라 주세요.", "error"); return; }
-  if (!rec.item) { setFormMsg("자재명을 골라 주세요.", "error"); return; }
-  if (rec.qty <= 0) { setFormMsg("수량은 0보다 커야 합니다.", "error"); return; }
-  if (rec.price < 0) { setFormMsg("단가는 0 이상이어야 합니다.", "error"); return; }
-  if (!rec.vendor) { setFormMsg("거래처를 골라 주세요.", "error"); return; }
+  var problem = validate(t, v);
+  if (problem) { setFormMsg(t.key, problem.replace(/<[^>]+>/g, ""), "error"); return; }
 
-  setFormMsg("");
-  $("btn-add").disabled = true;
-  setStatus("시트에 새 행을 추가하는 중입니다…", "busy");
+  setFormMsg(t.key, "");
+  $("add-" + t.key).disabled = true;
+  setStatus(t.label + "에 새 행을 추가하는 중입니다…", "busy");
 
   asPromise(gapi.client.sheets.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
-    range: range(SHEET_NAME, "A:" + LAST_COL),
+    range: range(t.sheet, "A:" + t.lastCol),
     valueInputOption: "RAW",
     insertDataOption: "INSERT_ROWS",
-    resource: { values: [rowFromRecord(rec)] }
+    resource: { values: [rowFromValues(t, v)] }
   })).then(function (res) {
     // 시트가 알려 준 "실제로 들어간 위치"에서 행 번호를 꺼냅니다
     var updatedRange = (res.result.updates && res.result.updates.updatedRange) || "";
     var m = updatedRange.match(/!\$?[A-Z]+\$?(\d+)/);
-    rec.row = m ? Number(m[1]) : (records.length + 2);
-    records.push(rec);
+    var rowNo = m ? Number(m[1]) : (data[t.key].length + 2);
+    data[t.key].push({ row: rowNo, v: v });
 
-    renderTable();
-    renderSummary();
-    fillManagerList();
-    $("btn-add").disabled = false;
-    $("f-note").value = "";
-    setFormMsg("추가되었습니다 (" + rec.row + "행)", "ok");
-    setStatus("시트에 <b>1건</b>을 추가했습니다. 총 " + records.length + "건입니다.", "ok");
+    renderAll();
+    clearFormAfterAdd(t);
+    $("add-" + t.key).disabled = false;
+    setFormMsg(t.key, "추가되었습니다 (" + rowNo + "행)", "ok");
+    setStatus("<b>" + t.label + "</b>에 1건을 추가했습니다. 총 " + data[t.key].length + "건입니다.", "ok");
   }).catch(function (err) {
-    $("btn-add").disabled = false;
-    setFormMsg("추가하지 못했습니다.", "error");
+    $("add-" + t.key).disabled = false;
+    setFormMsg(t.key, "추가하지 못했습니다.", "error");
     setStatus(explainError(err), "error");
   });
 }
 
-/* ---------- 7. 화면이 열릴 때 한 번 실행 ---------- */
+// 추가한 뒤 폼 정리 — 입고는 이어서 넣기 좋게 비고만, 나머지는 전부 비웁니다
+function clearFormAfterAdd(t) {
+  if (t.key === "inbound") {
+    var note = $("f-inbound-비고");
+    if (note) note.value = "";
+    return;
+  }
+  t.cols.forEach(function (col) {
+    var el = $("f-" + t.key + "-" + col.name);
+    if (!el || col.type === "computed") return;
+    el.value = "";
+  });
+}
+
+/* ---------- 8. 요약 카드 ---------- */
+
+function renderSummary(t) {
+  var box = $("sum-" + t.key);
+  var list = data[t.key] || [];
+  var stats = [];
+
+  if (t.key === "inbound") {
+    var total = 0, monthCount = 0, thisMonth = todayStr().slice(0, 7);
+    list.forEach(function (r) {
+      total += toNumber(r.v["금액"]);
+      if (String(r.v["날짜"]).slice(0, 7) === thisMonth) monthCount++;
+    });
+    stats = [
+      { label: "총 입고 건수", value: won(list.length) + "건" },
+      { label: "총 입고 금액", value: won(total) + "원" },
+      { label: "이번 달 건수", value: won(monthCount) + "건" }
+    ];
+  } else if (t.key === "vendor") {
+    stats = [
+      { label: "등록된 거래처", value: won(list.length) + "곳" },
+      { label: "결제조건 종류", value: uniq(list.map(function (r) { return r.v["결제조건"]; })).length + "가지" },
+      { label: "입고 실적이 있는 곳",
+        value: uniq((data["inbound"] || []).map(function (r) { return r.v["거래처"]; })).length + "곳" }
+    ];
+  } else if (t.key === "item") {
+    stats = [
+      { label: "등록된 자재", value: won(list.length) + "종" },
+      { label: "분류", value: uniq(list.map(function (r) { return r.v["분류"]; })).length + "가지" },
+      { label: "입고 이력이 있는 자재",
+        value: uniq((data["inbound"] || []).map(function (r) { return r.v["자재명"]; })).length + "종" }
+    ];
+  }
+
+  box.innerHTML = "";
+  stats.forEach(function (s) {
+    var d = document.createElement("div");
+    d.className = "stat";
+    d.innerHTML = '<div class="label">' + s.label + '</div><div class="value">' + s.value + "</div>";
+    box.appendChild(d);
+  });
+}
+
+/* ---------- 9. 화면이 열릴 때 한 번 실행 ---------- */
 
 document.addEventListener("DOMContentLoaded", function () {
-  $("f-date").value = todayStr();
-  calcFormAmount();
+  TABLES.forEach(function (t) { data[t.key] = []; editing[t.key] = null; });
+
+  buildNav();
+  buildViews();
+  renderAll();
 
   $("btn-connect").addEventListener("click", onConnectClick);
 
@@ -578,12 +871,6 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!gapiReady) missing.push("Google Sheets 라이브러리");
     if (!gisReady) missing.push("Google 로그인 라이브러리");
     setStatus("⚠️ " + missing.join("와 ") + "를 아직 불러오지 못했습니다. " +
-      "인터넷 연결을 확인하시고, 이 페이지를 <b>배포된 https 주소</b>에서 열었는지 확인해 주세요. " +
-      "(내 PC 파일을 직접 여는 <code>file:///</code> 방식에서는 동작하지 않습니다)", "error");
+      "인터넷 연결을 확인하시고, 이 페이지를 <b>배포된 https 주소</b>에서 열었는지 확인해 주세요.", "error");
   }, 8000);
-
-  $("btn-add").addEventListener("click", onAddClick);
-  $("f-qty").addEventListener("input", calcFormAmount);
-  $("f-price").addEventListener("input", calcFormAmount);
-  $("f-item").addEventListener("change", updateUnitLabel);
 });

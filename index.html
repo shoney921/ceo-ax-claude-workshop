@@ -7,95 +7,40 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="wrap">
+  <div class="layout">
 
-    <header>
-      <div>
-        <h1>🏭 우리 공장 입고 관리</h1>
-        <p>자재 입고 내역을 기록하고 한눈에 봅니다</p>
+    <!-- ===== 왼쪽 사이드바 ===== -->
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-icon">🏭</span>
+        <span class="brand-text">우리 공장<br /><b>입고 관리</b></span>
       </div>
-      <button class="btn-connect" type="button" id="btn-connect" disabled>준비 중…</button>
-    </header>
 
-    <!-- 상태 안내줄: 로그인/저장/오류 상황을 여기에 한국어로 보여 줍니다 -->
-    <div class="status" id="status">
-      오른쪽 위 <b>Google 계정으로 연결</b> 버튼을 누르면 내 시트의 입고 내역을 불러옵니다.
-    </div>
+      <!-- 메뉴는 app.js가 만듭니다 (시트 탭 3개에 맞춰서) -->
+      <nav class="nav" id="nav"></nav>
 
-    <!-- 요약 -->
-    <section class="summary">
-      <div class="stat"><div class="label">총 입고 건수</div><div class="value" id="stat-count">–</div></div>
-      <div class="stat"><div class="label">총 입고 금액</div><div class="value" id="stat-amount">–</div></div>
-      <div class="stat"><div class="label">이번 달 건수</div><div class="value" id="stat-month">–</div></div>
-    </section>
-
-    <!-- 입력 폼 (입고기록 탭의 열 구조와 동일) -->
-    <section class="card">
-      <h2>+ 입고 추가</h2>
-      <div class="form-grid">
-        <div class="field">
-          <label for="f-date">날짜</label>
-          <input id="f-date" type="date" />
-        </div>
-        <div class="field">
-          <label for="f-item">자재명</label>
-          <select id="f-item"><option value="">— 연결 후 선택 —</option></select>
-        </div>
-        <div class="field">
-          <label for="f-qty">수량 <span class="unit" id="f-unit"></span></label>
-          <input id="f-qty" type="number" min="0" step="1" placeholder="0" />
-        </div>
-        <div class="field">
-          <label for="f-price">단가</label>
-          <input id="f-price" type="number" min="0" step="1" placeholder="0" />
-        </div>
-        <div class="field readonly">
-          <label for="f-amount">금액 (수량 × 단가, 자동)</label>
-          <input id="f-amount" type="text" value="0" readonly tabindex="-1" />
-        </div>
-        <div class="field">
-          <label for="f-vendor">거래처</label>
-          <select id="f-vendor"><option value="">— 연결 후 선택 —</option></select>
-        </div>
-        <div class="field">
-          <label for="f-mgr">담당자</label>
-          <input id="f-mgr" type="text" list="mgr-list" placeholder="이름" />
-          <datalist id="mgr-list"></datalist>
-        </div>
-        <div class="field">
-          <label for="f-note">비고</label>
-          <input id="f-note" type="text" placeholder="(선택)" />
-        </div>
+      <div class="sidebar-foot">
+        <button class="btn-connect" type="button" id="btn-connect" disabled>준비 중…</button>
+        <p class="sidebar-note" id="account-note"></p>
       </div>
-      <div class="form-actions">
-        <span class="form-msg" id="form-msg"></span>
-        <button class="btn-add" type="button" id="btn-add" disabled>추가</button>
-      </div>
-    </section>
+    </aside>
 
-    <!-- 표 -->
-    <section class="card">
-      <h2>입고 내역 <span class="muted" id="row-count"></span></h2>
-      <div class="table-scroll">
-        <table id="tbl">
-          <thead>
-            <tr>
-              <th>날짜</th><th>자재명</th><th class="num">수량</th>
-              <th class="num">단가</th><th class="num">금액</th>
-              <th>거래처</th><th>담당자</th><th>비고</th><th></th>
-            </tr>
-          </thead>
-          <tbody id="tbody">
-            <tr class="empty-row"><td colspan="9">아직 연결 전입니다. 위의 <b>Google 계정으로 연결</b> 버튼을 눌러 주세요.</td></tr>
-          </tbody>
-        </table>
+    <!-- ===== 오른쪽 본문 ===== -->
+    <main class="main">
+      <!-- 상태 안내줄: 로그인·저장·오류 상황을 여기에 보여 줍니다 -->
+      <div class="status" id="status">
+        왼쪽 아래 <b>Google 계정으로 연결</b> 버튼을 누르면 내 시트의 내용을 불러옵니다.
       </div>
-    </section>
 
-    <p class="note">
-      🔒 이 앱은 <b>추가·조회·수정</b>만 합니다. 행을 지우는 기능은 일부러 넣지 않았습니다.
-      지워야 할 행이 있으면 Google Sheets에서 직접 지우세요 (실수해도 시트의 <b>파일 → 버전 기록</b>으로 되돌릴 수 있습니다).
-    </p>
+      <!-- 화면 3개(입고 내역 / 거래처 / 자재)는 app.js가 만듭니다 -->
+      <div id="views"></div>
+
+      <p class="note">
+        🔒 이 앱은 <b>추가·조회·수정</b>만 합니다. 행을 지우는 기능은 일부러 넣지 않았습니다.
+        지워야 할 행이 있으면 Google Sheets에서 직접 지우세요
+        (실수해도 시트의 <b>파일 → 버전 기록</b>으로 되돌릴 수 있습니다).
+      </p>
+    </main>
 
   </div>
 
@@ -103,7 +48,7 @@
   <script src="config.js"></script>
   <script src="app.js"></script>
 
-  <!-- Google 라이브러리는 마지막에 — 로드가 끝나면 위에서 정의한 함수를 부릅니다 -->
+  <!-- Google 라이브러리는 마지막에 -->
   <script src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
   <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 </body>

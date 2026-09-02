@@ -1,15 +1,18 @@
 /* ============================================================
    style.css — 화면 꾸미기 (순수 CSS)
+   왼쪽 사이드바 + 오른쪽 본문 구조
    ============================================================ */
 
 :root {
   --blue: #1f6feb;
   --blue-dark: #1a5fd0;
+  --blue-soft: #eaf1fd;
   --ink: #1f2328;
   --muted: #656d76;
   --line: #d0d7de;
   --bg: #f6f8fa;
   --card: #ffffff;
+  --side: #ffffff;
   --green: #1a7f37;
   --red: #cf222e;
 }
@@ -24,24 +27,61 @@ body {
   line-height: 1.5;
 }
 
-.wrap { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; }
 .muted { color: var(--muted); font-weight: 400; font-size: 12px; }
+.req { color: var(--red); }
 
-/* ---- 헤더 ---- */
-header {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+/* ---- 전체 배치 ---- */
+.layout { display: flex; min-height: 100vh; align-items: stretch; }
+
+/* ---- 왼쪽 사이드바 ---- */
+.sidebar {
+  width: 220px; flex: 0 0 220px;
+  background: var(--side); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column;
+  position: sticky; top: 0; height: 100vh;
 }
-header h1 { font-size: 22px; margin: 0; }
-header p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+
+.brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 20px 18px; border-bottom: 1px solid var(--line);
+}
+.brand-icon { font-size: 24px; }
+.brand-text { font-size: 13px; color: var(--muted); line-height: 1.35; }
+.brand-text b { display: block; font-size: 16px; color: var(--ink); }
+
+.nav { padding: 12px 10px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  width: 100%; text-align: left;
+  padding: 10px 12px; border: none; border-radius: 8px;
+  background: transparent; color: var(--ink);
+  font-size: 14px; font-family: inherit; cursor: pointer;
+}
+.nav-item:hover { background: var(--bg); }
+.nav-item.active { background: var(--blue-soft); color: var(--blue); font-weight: 600; }
+.nav-icon { font-size: 16px; }
+.nav-label { flex: 1; }
+.nav-count { font-size: 12px; color: var(--muted); }
+.nav-item.active .nav-count { color: var(--blue); }
+
+.sidebar-foot { padding: 14px; border-top: 1px solid var(--line); }
+.sidebar-note { margin: 8px 0 0; font-size: 11px; color: var(--muted); }
 
 .btn-connect {
+  width: 100%;
   background: var(--blue); color: #fff; border: none; border-radius: 8px;
-  padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer;
+  padding: 10px 12px; font-size: 13px; font-weight: 600; font-family: inherit; cursor: pointer;
 }
 .btn-connect:hover:not(:disabled) { background: var(--blue-dark); }
 .btn-connect:disabled { background: #b9c2cc; cursor: default; }
 .btn-connect.connected { background: #fff; color: var(--green); border: 1px solid var(--line); }
+
+/* ---- 오른쪽 본문 ---- */
+.main { flex: 1; min-width: 0; padding: 24px 28px 64px; max-width: 1100px; }
+
+.view-head { margin-bottom: 18px; }
+.view-head h1 { font-size: 22px; margin: 0; }
+.view-head p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
 
 /* ---- 상태 안내줄 ---- */
 .status {
@@ -73,7 +113,7 @@ header p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
 .field .unit { color: var(--blue); font-weight: 600; }
 .field input, .field select {
   padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px;
-  background: #fff; color: var(--ink); width: 100%;
+  background: #fff; color: var(--ink); width: 100%; font-family: inherit;
 }
 .field input:disabled, .field select:disabled { background: var(--bg); color: #9aa4ae; }
 .field.readonly input { background: var(--bg); color: var(--muted); }
@@ -85,44 +125,43 @@ header p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
 
 .btn-add {
   background: var(--blue); color: #fff; border: none; border-radius: 8px;
-  padding: 10px 20px; font-size: 14px; font-weight: 600; cursor: pointer;
+  padding: 10px 20px; font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer;
 }
 .btn-add:hover:not(:disabled) { background: var(--blue-dark); }
 .btn-add:disabled { background: #b9c2cc; cursor: default; }
 
 /* ---- 표 ---- */
 .table-scroll { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 820px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
 th { background: var(--bg); font-size: 12px; color: var(--muted); font-weight: 600; }
 td.num, th.num { text-align: right; }
 tbody tr:hover { background: #fbfcfd; }
-.empty-row td { color: var(--muted); text-align: center; padding: 28px 12px; }
+.empty-row td { color: var(--muted); text-align: center; padding: 28px 12px; white-space: normal; }
 
-/* 수정 중인 행 */
 tr.editing { background: #f2f7ff; }
 tr.editing td { padding: 6px 8px; }
 tr.editing input, tr.editing select {
   padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px;
-  font-size: 13px; width: 100%; min-width: 90px; background: #fff; color: var(--ink);
+  font-size: 13px; width: 100%; min-width: 92px; background: #fff; color: var(--ink); font-family: inherit;
 }
 tr.editing input.num { text-align: right; }
 tr.editing td.amount-cell { text-align: right; color: var(--muted); font-size: 13px; }
 
 .btn-edit {
   background: #fff; border: 1px solid var(--line); border-radius: 6px;
-  padding: 4px 12px; font-size: 13px; cursor: pointer; color: var(--ink);
+  padding: 4px 12px; font-size: 13px; font-family: inherit; cursor: pointer; color: var(--ink);
 }
 .btn-edit:hover:not(:disabled) { border-color: var(--blue); color: var(--blue); }
 .btn-edit:disabled { color: #b9c2cc; cursor: default; }
 .btn-save {
   background: var(--blue); color: #fff; border: none; border-radius: 6px;
-  padding: 5px 12px; font-size: 13px; cursor: pointer; margin-right: 4px;
+  padding: 5px 12px; font-size: 13px; font-family: inherit; cursor: pointer; margin-right: 4px;
 }
 .btn-save:hover:not(:disabled) { background: var(--blue-dark); }
 .btn-cancel {
   background: #fff; border: 1px solid var(--line); border-radius: 6px;
-  padding: 4px 10px; font-size: 13px; cursor: pointer; color: var(--muted);
+  padding: 4px 10px; font-size: 13px; font-family: inherit; cursor: pointer; color: var(--muted);
 }
 
 .note {
@@ -130,7 +169,20 @@ tr.editing td.amount-cell { text-align: right; color: var(--muted); font-size: 1
   border: 1px solid #f0e0a8; border-radius: 8px; padding: 10px 14px;
 }
 
-@media (max-width: 720px) {
+/* ---- 좁은 화면: 사이드바를 위쪽 가로 메뉴로 ---- */
+@media (max-width: 900px) {
+  .layout { flex-direction: column; }
+  .sidebar {
+    width: auto; flex: none; height: auto; position: static;
+    border-right: none; border-bottom: 1px solid var(--line);
+  }
+  .brand { padding: 14px 16px; border-bottom: none; }
+  .nav { flex-direction: row; overflow-x: auto; padding: 0 12px 10px; }
+  .nav-item { white-space: nowrap; }
+  .sidebar-foot { border-top: none; padding: 0 16px 14px; }
+  .btn-connect { width: auto; padding: 9px 16px; }
+  .sidebar-note { display: none; }
+  .main { padding: 20px 16px 56px; }
   .summary { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr 1fr; }
 }
