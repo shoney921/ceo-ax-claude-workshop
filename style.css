@@ -232,3 +232,57 @@ tr.editing td.amount-cell { color: var(--muted); font-size: 13px; text-align: ri
   .sidebar-note { display: none; }
   .view-head h1 { font-size: 23px; }
 }
+
+/* White workspace theme */
+:root {
+  --navy: #202a33;
+  --navy-2: #33414d;
+  --accent: #256f76;
+  --accent-dark: #1d5b61;
+  --accent-soft: #edf6f5;
+  --ink: #202a33;
+  --muted: #687580;
+  --line: #e3e8eb;
+  --bg: #ffffff;
+  --card: #ffffff;
+}
+
+body { background: #fff; }
+.sidebar { background: #fff; color: var(--ink); border-right: 1px solid var(--line); }
+.brand { border-bottom-color: var(--line); }
+.brand-mark { border-color: #263945; background: #263945; color: #fff; }
+.brand-text { color: var(--muted); }
+.brand-text b { color: var(--ink); }
+.nav-item { color: #4d5b66; }
+.nav-item:hover { background: #f5f8f8; color: var(--ink); }
+.nav-item.active { border-color: #d6e8e6; background: var(--accent-soft); color: #1b6269; }
+.nav-icon { color: #71808a; }
+.nav-count { color: #8b979f; }
+.nav-item.active .nav-count { color: #27727a; }
+.sidebar-foot { border-top-color: var(--line); }
+.sidebar-note { color: var(--muted); }
+.btn-connect { border-color: #c4d8d7; background: #fff; color: #245f64; }
+.btn-connect:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
+.btn-connect:disabled { border-color: #e0e5e7; background: #f2f4f5; color: #96a1a8; }
+.btn-connect.connected { border-color: #b6d7d2; background: #f4faf9; color: #287060; }
+.main { max-width: 1320px; padding-top: 44px; }
+.status { background: #fbfcfc; border-color: var(--line); border-left-color: var(--accent); }
+.status.ok { background: #f7fbfa; }
+.status.error { background: #fff9f8; }
+.status.busy { background: #fffdf7; }
+.view-head { padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+.view-head h1 { font-weight: 680; }
+.summary { gap: 0; margin-bottom: 30px; border: 1px solid var(--line); }
+.stat { border: 0; border-right: 1px solid var(--line); }
+.stat:last-child { border-right: 0; }
+.stat .value { font-weight: 680; }
+.card { border-color: var(--line); box-shadow: none; }
+.card h2 { padding-bottom: 14px; border-bottom: 1px solid #edf0f1; }
+th { background: #fafbfb; }
+tbody tr:hover { background: #f8fbfb; }
+
+@media (max-width: 900px) {
+  .sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
+  .summary { gap: 12px; border: 0; }
+  .stat { border: 1px solid var(--line); }
+}
