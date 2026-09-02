@@ -19,4 +19,4 @@ var VENDOR_SHEET_NAME = "거래처";
 // 4) Google Cloud에서 만든 OAuth 클라이언트 ID
 //    ...apps.googleusercontent.com 으로 끝나는 값입니다.
 //    ⚠️ 클라이언트 "시크릿"은 절대 여기 넣지 마세요. ID만 넣습니다.
-var CLIENT_ID = "여기에_내_클라이언트_ID를_넣으세요";
+var CLIENT_ID = "1010864947255-i24qnlcvio6c53lk5jedbfdos6ci4foq.apps.googleusercontent.com";
