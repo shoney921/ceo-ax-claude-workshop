@@ -17,7 +17,7 @@ var TABLES = [
   {
     key: "inbound",
     label: "입고 내역",
-    icon: "📥",
+    icon: "01",
     desc: "자재가 들어온 내역을 기록합니다",
     addTitle: "+ 입고 추가",
     sheet: SHEET_NAME,
@@ -38,7 +38,7 @@ var TABLES = [
   {
     key: "vendor",
     label: "거래처",
-    icon: "🏢",
+    icon: "02",
     desc: "자재를 사 오는 회사들을 관리합니다",
     addTitle: "+ 거래처 추가",
     sheet: VENDOR_SHEET_NAME,
@@ -55,7 +55,7 @@ var TABLES = [
   {
     key: "item",
     label: "자재",
-    icon: "📦",
+    icon: "03",
     desc: "취급하는 자재 목록을 관리합니다",
     addTitle: "+ 자재 추가",
     sheet: ITEM_SHEET_NAME,
@@ -227,7 +227,7 @@ function updateConnectButton() {
   var btn = $("btn-connect");
   btn.disabled = !(gapiReady && gisReady);
   if (connected) {
-    btn.textContent = "✓ 연결됨 · 새로고침";
+    btn.textContent = "연결됨 · 새로고침";
     btn.className = "btn-connect connected";
   } else {
     btn.textContent = gapiReady && gisReady ? "Google 계정으로 연결" : "준비 중…";
